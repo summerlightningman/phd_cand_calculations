@@ -1,17 +1,20 @@
 mod classes;
+mod console_log;
 mod dataset;
+mod file_opener;
 mod types;
 
 use chrono::prelude::*;
 use rayon::prelude::*;
 
-use classes::algorithm_params::AlgorithmParams;
 use csv::Writer;
 use ndarray::Array2;
 use ndarray_npy::ReadNpyExt;
+use types::{FileRow, SenderInfo};
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
+
+use std::sync::Arc;
 use std::{
     env::current_dir,
     fs::{self, File},
@@ -24,32 +27,17 @@ use classes::run_algo::run_algo;
 
 use dataset::DatasetRow;
 
+use console_log::Logger;
+use file_opener::FileManager;
+
+use std::io::prelude::*;
+
 const MATRICES_COUNT: usize = 100;
-const DATASET_DIR: &'static str = "matrices";
-static LOG_CALL_COUNT: AtomicUsize = AtomicUsize::new(0);
-static PROGRESS_FINISH_VALUE: f64 = (MATRICES_COUNT * ALGORITHMS.len()) as f64;
+const MATRICES_DIR: &'static str = "matrices";
 
-fn log(path: &Path, algo: &AlgorithmParams, status: &str) {
-    let file_name = path.file_name().unwrap().to_str().unwrap();
-    let params = serde_json::to_string(algo).unwrap();
-    if status.eq("END") {
-        LOG_CALL_COUNT.fetch_add(1, Ordering::SeqCst);
-    }
+static PROGRESS_FINISH_VALUE: usize = MATRICES_COUNT;
 
-    let progress =
-        (LOG_CALL_COUNT.load(Ordering::SeqCst) as f64 / PROGRESS_FINISH_VALUE * 100.0f64).floor();
-
-    println!(
-        "{} {}% {:>30} {:>95} {:>5}",
-        now(),
-        progress,
-        file_name,
-        params,
-        status
-    )
-}
-
-fn process_matrix(path: &Path, csv_sender: Sender<DatasetRow>) {
+fn process_matrix(logger: Arc<Logger>, path: &Path, csv_sender: Sender<SenderInfo>) {
     let file = match File::open(path) {
         Ok(f) => f,
         Err(_) => {
@@ -65,75 +53,90 @@ fn process_matrix(path: &Path, csv_sender: Sender<DatasetRow>) {
 
     let matrix_vec: Vec<Vec<f64>> = matrix.outer_iter().map(|row| row.to_vec()).collect();
 
+    let file_name: String = path.file_name().unwrap().to_str().unwrap().to_string();
     for params in ALGORITHMS {
-        log(path, &params, "START");
+        logger.log(path, &params, "START");
         let solutions = run_algo(params.clone(), matrix_vec.clone());
         let solutions_unwrapped = match solutions {
             Ok(s) if s.len() < 1 => {
-                log(path, &params, "ERROR");
+                logger.log(path, &params, "ERROR");
                 continue;
             }
             Ok(s) => s,
             Err(_) => {
-                log(path, &params, "ERROR");
+                logger.log(path, &params, "ERROR");
                 continue;
             }
         };
 
-        log(path, &params, "END");
+        logger.log(path, &params, "END");
 
         let row = DatasetRow::new(
+            file_name.clone(),
             params,
             matrix_vec.clone(),
             solutions_unwrapped[0].solution.fitness,
         );
-        let _ = csv_sender.send(row);
+        let _ = csv_sender.send(SenderInfo::DatasetRow(row));
     }
+
+    let _ = csv_sender.send(SenderInfo::FileRow(FileRow(file_name.clone())));
 }
 
-fn now() -> String {
-    Utc::now().format("%H:%M:%S").to_string()
-}
-
-fn generate_csv_filename() -> String {
-    Utc::now().format("dataset_%Y-%m-%d_%H:00.csv").to_string()
-}
-
-fn writer_handle(receiver: Receiver<DatasetRow>, output_file: String) {
-    let file = File::create(output_file).expect("Не удалось создать файл");
-    let mut writer = Writer::from_writer(file);
+fn writer_handle(receiver: Receiver<SenderInfo>, file_manager: FileManager) {
+    let FileManager {
+        dataset_file,
+        mut log_file,
+        ..
+    } = file_manager;
+    let mut writer = Writer::from_writer(dataset_file);
 
     // Получаем результаты и записываем их
     for result in receiver {
-        writer
-            .serialize(result)
-            .expect("Не удалось записать результат");
+        match result {
+            SenderInfo::FileRow(FileRow(file_path)) => {
+                log_file
+                    .write(format!("{}\n", file_path).as_bytes())
+                    .expect(format!("Unable to write {}", file_path).as_str());
+            }
+            SenderInfo::DatasetRow(row) => {
+                writer
+                    .serialize(row)
+                    .expect("Не удалось записать результат");
+            }
+        }
     }
 }
 
 fn main() {
-    let current_dir = current_dir().unwrap();
-    let dataset_path = current_dir.join(DATASET_DIR);
-    let matrices_paths: Vec<_> = fs::read_dir(dataset_path)
+    let curr_dir = current_dir().unwrap();
+    let matrices_path = curr_dir.join(MATRICES_DIR);
+    let matrices_paths: Vec<_> = fs::read_dir(matrices_path)
         .unwrap()
         .take(MATRICES_COUNT)
         .collect();
 
+    let logger = Arc::new(Logger::new(PROGRESS_FINISH_VALUE));
+
+    let file_manager = FileManager::new(MATRICES_COUNT);
+    let log_entries = file_manager.log_entries.clone();
+
     let (result_sender, result_receiver) = mpsc::channel();
+    let writer_thread = thread::spawn(move || writer_handle(result_receiver, file_manager));
 
-    let writer_thread =
-        thread::spawn(move || writer_handle(result_receiver, generate_csv_filename()));
+    let calculation_dt_start = Local::now();
 
-    let calculation_dt_start = Utc::now();
     matrices_paths.par_iter().for_each(|matrix| {
         let path = match matrix {
             Ok(dir_entry) => dir_entry.path(),
             Err(_) => return,
         };
 
-        let csv_sender = result_sender.clone();
+        if log_entries.contains(path.as_path().to_str().unwrap()) {
+            return;
+        }
 
-        process_matrix(path.as_path(), csv_sender);
+        process_matrix(logger.clone(), path.as_path(), result_sender.clone());
     });
 
     drop(result_sender);
@@ -142,7 +145,7 @@ fn main() {
         .join()
         .expect("writer handle завершился с ошибкой");
 
-    let calculation_dt_end = Utc::now();
+    let calculation_dt_end = Local::now();
     let duration = calculation_dt_end.signed_duration_since(calculation_dt_start);
     println!(
         "Calculation finished in {}d {}h {}m {}s",

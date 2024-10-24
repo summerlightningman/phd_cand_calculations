@@ -11,11 +11,18 @@ pub struct DatasetRow {
     pub algo: AlgorithmParams,
     pub matrix: Matrix,
     pub fitness: f32,
+    pub file_name: String,
 }
 
 impl DatasetRow {
-    pub fn new(algo: AlgorithmParams, matrix: Vec<Vec<f64>>, fitness: f32) -> Self {
+    pub fn new(
+        file_name: String,
+        algo: AlgorithmParams,
+        matrix: Vec<Vec<f64>>,
+        fitness: f32,
+    ) -> Self {
         Self {
+            file_name,
             algo,
             matrix: Matrix(matrix),
             fitness,

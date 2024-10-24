@@ -1,3 +1,4 @@
+use super::DatasetRow;
 use phd_cand::problems::travelling_salesman::algorithms::{
     ant_colony::algorithm::TSAntColonyAlgorithm, bee_colony::algorithm::TSBeeColonyAlgorithm,
     genetic::algorithm::TSGeneticAlgorithm,
@@ -61,4 +62,11 @@ impl OptimizationAlgorithm for TSGeneticAlgorithm {
     fn calculate(&self) -> Result<Vec<TSSolution>, String> {
         map_solutions(self.run())
     }
+}
+
+pub struct FileRow(pub String);
+
+pub enum SenderInfo {
+    DatasetRow(DatasetRow),
+    FileRow(FileRow),
 }

@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  rust-app:
+    image: rust:latest
+    container_name: rust-app-container
+    volumes:
+      - .:/usr/src/app
+      - /path/to/phd-cand:/usr/src/phd-cand
+    working_dir: /usr/src/app
+    environment:
+      RUSTFLAGS: "-L /usr/src/phd-cand"
+    command: cargo run
+    restart: always # Автоматический перезапуск контейнера
+    ports:
+      - "8080:8080"
