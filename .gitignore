@@ -1,4 +1,7 @@
 target
 */.DS_Store
 .idea
-matrices
+matrices/
+dataset_*.csv
+log_*.csv
+.DS_Store/
