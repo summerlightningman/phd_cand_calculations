@@ -4,11 +4,10 @@ services:
     container_name: rust-app-container
     volumes:
       - .:/usr/src/app
-      - /path/to/phd-cand:/usr/src/phd-cand
     working_dir: /usr/src/app
     environment:
-      RUSTFLAGS: "-L /usr/src/phd-cand"
+      - TZ=Europe/Moscow
     command: cargo run
-    restart: always # Автоматический перезапуск контейнера
+    restart: unless-stopped
     ports:
       - "8080:8080"

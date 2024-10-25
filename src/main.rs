@@ -32,7 +32,7 @@ use file_opener::FileManager;
 
 use std::io::prelude::*;
 
-const MATRICES_COUNT: usize = 100;
+const MATRICES_COUNT: usize = 50000;
 const MATRICES_DIR: &'static str = "matrices";
 
 static PROGRESS_FINISH_VALUE: usize = MATRICES_COUNT;
