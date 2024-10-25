@@ -12,8 +12,8 @@ use ndarray::Array2;
 use ndarray_npy::ReadNpyExt;
 use types::{FileRow, SenderInfo};
 
+use std::env;
 use std::sync::mpsc::{self, Receiver, Sender};
-
 use std::sync::Arc;
 use std::{
     env::current_dir,
@@ -32,10 +32,7 @@ use file_opener::FileManager;
 
 use std::io::prelude::*;
 
-const MATRICES_COUNT: usize = 50000;
 const MATRICES_DIR: &'static str = "matrices";
-
-static PROGRESS_FINISH_VALUE: usize = MATRICES_COUNT;
 
 fn process_matrix(logger: Arc<Logger>, path: &Path, csv_sender: Sender<SenderInfo>) {
     let file = match File::open(path) {
@@ -109,16 +106,21 @@ fn writer_handle(receiver: Receiver<SenderInfo>, file_manager: FileManager) {
 }
 
 fn main() {
+    let matrices_count: usize = match env::var("MATRICES_COUNT") {
+        Ok(val) => val.parse().unwrap(),
+        Err(_) => 50000,
+    };
+
     let curr_dir = current_dir().unwrap();
     let matrices_path = curr_dir.join(MATRICES_DIR);
     let matrices_paths: Vec<_> = fs::read_dir(matrices_path)
         .unwrap()
-        .take(MATRICES_COUNT)
+        .take(matrices_count)
         .collect();
 
-    let logger = Arc::new(Logger::new(PROGRESS_FINISH_VALUE));
+    let logger = Arc::new(Logger::new(matrices_count));
 
-    let file_manager = FileManager::new(MATRICES_COUNT);
+    let file_manager = FileManager::new(matrices_count);
     let log_entries = file_manager.log_entries.clone();
 
     let (result_sender, result_receiver) = mpsc::channel();
