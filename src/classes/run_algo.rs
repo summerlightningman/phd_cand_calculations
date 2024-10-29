@@ -1,5 +1,3 @@
-use std::panic::{self, UnwindSafe};
-
 use phd_cand::algorithms::bee_colony::research_methods::{reverse_elements, swap_indexes};
 use phd_cand::algorithms::genetic::methods::{Mutate, Select};
 use phd_cand::problems::travelling_salesman::algorithms::{

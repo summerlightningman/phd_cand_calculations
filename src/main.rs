@@ -49,25 +49,27 @@ fn process_matrix(logger: Arc<Logger>, path: &Path, csv_sender: Sender<SenderInf
         Err(_) => return,
     };
 
+    logger.log_file(path, "START");
+
     let matrix_vec: Vec<Vec<f64>> = matrix.outer_iter().map(|row| row.to_vec()).collect();
 
     let file_name: String = path.file_name().unwrap().to_str().unwrap().to_string();
     for params in ALGORITHMS {
-        logger.log(path, &params, "START");
+        logger.log_calculation(path, &params, "START");
         let solutions = run_algo(params.clone(), matrix_vec.clone());
         let solutions_unwrapped = match solutions {
             Ok(s) if s.len() < 1 => {
-                logger.log(path, &params, "ERROR");
+                logger.log_calculation(path, &params, "ERROR");
                 continue;
             }
             Ok(s) => s,
             Err(_) => {
-                logger.log(path, &params, "ERROR");
+                logger.log_calculation(path, &params, "ERROR");
                 continue;
             }
         };
 
-        logger.log(path, &params, "END");
+        logger.log_calculation(path, &params, "END");
 
         let row = DatasetRow::new(
             file_name.clone(),
@@ -77,6 +79,8 @@ fn process_matrix(logger: Arc<Logger>, path: &Path, csv_sender: Sender<SenderInf
         );
         let _ = csv_sender.send(SenderInfo::DatasetRow(row));
     }
+
+    logger.log_file(path, "END");
 
     let _ = csv_sender.send(SenderInfo::FileRow(FileRow(file_name.clone())));
 }
@@ -135,7 +139,7 @@ fn main() {
         };
 
         if log_entries.contains(path.file_name().unwrap().to_str().unwrap()) {
-            return;
+            return
         }
 
         process_matrix(logger.clone(), path.as_path(), result_sender.clone());
