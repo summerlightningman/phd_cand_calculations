@@ -6,16 +6,16 @@ use std::path::Path;
 
 pub struct Logger {
     pub counter: AtomicUsize,
-    progress_finish_value: f64,
+    progress_target_value: f64,
 }
 
 impl Logger {
-    pub fn new(progress_finish_value: usize) -> Self {
-        let counter = AtomicUsize::new(0);
+    pub fn new(progress_start_value: usize, progress_target_value: usize) -> Self {
+        let counter = AtomicUsize::new(progress_start_value);
 
         Self {
             counter,
-            progress_finish_value: progress_finish_value as f64,
+            progress_target_value: progress_target_value as f64,
         }
     }
 
@@ -30,7 +30,7 @@ impl Logger {
             self.counter.fetch_add(1, Ordering::SeqCst);
         }
 
-        let progress = (self.counter.load(Ordering::SeqCst) as f64 / self.progress_finish_value).floor();
+        let progress = (self.counter.load(Ordering::SeqCst) as f64 / self.progress_target_value * 100f64).floor();
 
         println!(
             "{} {}% {:>30} {:>95} {:>5}",

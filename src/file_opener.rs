@@ -24,17 +24,17 @@ impl FileManager {
             let old_log_file = File::open(&log_path);
 
             if let Ok(old_log_file) = old_log_file {
-                let count = BufReader::new(&old_log_file).lines().count();
-                let pattern = Regex::new(r"log_(?<count>)_(?<dt>.*?).csv").unwrap();
+                let old_file_count_finished = BufReader::new(&old_log_file).lines().count();
+                let pattern = Regex::new(r"log_(?<count>\d+)_(?<dt>.*).csv").unwrap();
                 let caps = pattern.captures(&log_path);
                 if let Some(caps) = caps {
-                    let start_count = caps
+                    let old_file_count_target = caps
                         .name("count")
                         .unwrap()
                         .as_str()
                         .parse::<usize>()
                         .unwrap();
-                    if count < start_count && count == matrices_count {
+                    if old_file_count_finished < old_file_count_target && old_file_count_target == matrices_count {
                         let log_file = OpenOptions::new().append(true).read(true).open(&log_path);
                         if let Ok(log_file) = log_file {
                             let date_time = caps.name("dt").unwrap().as_str().to_string();
