@@ -33,7 +33,7 @@ use file_opener::FileManager;
 use std::io::prelude::*;
 
 const MATRICES_DIR: &'static str = "matrices";
-const MATRICES_COUNT_TARGET: usize = 10000;
+const MATRICES_COUNT_TARGET_DEFAULT: usize = 100;
 
 fn process_matrix(logger: Arc<Logger>, path: &Path, csv_sender: Sender<SenderInfo>) {
     let file = match File::open(path) {
@@ -56,6 +56,7 @@ fn process_matrix(logger: Arc<Logger>, path: &Path, csv_sender: Sender<SenderInf
     let file_name: String = path.file_name().unwrap().to_str().unwrap().to_string();
     for params in ALGORITHMS {
         logger.log_calculation(path, &params, "START");
+
         let solutions = run_algo(params.clone(), matrix_vec.clone());
         let solutions_unwrapped = match solutions {
             Ok(s) if s.len() < 1 => {
@@ -75,7 +76,7 @@ fn process_matrix(logger: Arc<Logger>, path: &Path, csv_sender: Sender<SenderInf
             file_name.clone(),
             params,
             matrix_vec.clone(),
-            solutions_unwrapped[0].solution.fitness,
+            solutions_unwrapped[0].fitness,
         );
         let _ = csv_sender.send(SenderInfo::DatasetRow(row));
     }
@@ -112,20 +113,29 @@ fn writer_handle(receiver: Receiver<SenderInfo>, file_manager: FileManager) {
 
 fn main() {
     let matrices_count: usize = match env::var("MATRICES_COUNT") {
-        Ok(val) => val.parse().unwrap_or(MATRICES_COUNT_TARGET),
-        Err(_) => MATRICES_COUNT_TARGET,
+        Ok(val) => val.parse().unwrap_or(MATRICES_COUNT_TARGET_DEFAULT),
+        Err(_) => MATRICES_COUNT_TARGET_DEFAULT,
     };
+
+    let file_manager = FileManager::new(matrices_count);
+    let logger = Arc::new(Logger::new(file_manager.log_entries.len(), matrices_count));
+    let log_entries = file_manager.log_entries.clone();
 
     let curr_dir = current_dir().unwrap();
     let matrices_path = curr_dir.join(MATRICES_DIR);
     let matrices_paths: Vec<_> = fs::read_dir(matrices_path)
         .unwrap()
-        .take(matrices_count)
+        .filter(|dir_entry| {
+            if log_entries.is_empty() {
+                true
+            } else if let Ok(entry) = dir_entry {
+                log_entries.contains(entry.file_name().to_str().unwrap())
+            } else {
+                false
+            }
+        })
+        .take(matrices_count - log_entries.len())
         .collect();
-
-    let file_manager = FileManager::new(matrices_count);
-    let logger = Arc::new(Logger::new(file_manager.log_entries.len(), matrices_count));
-    let log_entries = file_manager.log_entries.clone();
 
     let (result_sender, result_receiver) = mpsc::channel();
     let writer_thread = thread::spawn(move || writer_handle(result_receiver, file_manager));
@@ -137,10 +147,6 @@ fn main() {
             Ok(dir_entry) => dir_entry.path(),
             Err(_) => return,
         };
-
-        if log_entries.contains(path.file_name().unwrap().to_str().unwrap()) {
-            return
-        }
 
         process_matrix(logger.clone(), path.as_path(), result_sender.clone());
     });

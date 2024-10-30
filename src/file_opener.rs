@@ -90,7 +90,7 @@ impl FileManager {
     }
 
     fn now() -> String {
-        Local::now().format("%Y-%m-%d_%H:00").to_string()
+        Local::now().format("%Y-%m-%d_%H_00").to_string()
     }
 
     fn get_log_file_path() -> Option<String> {
