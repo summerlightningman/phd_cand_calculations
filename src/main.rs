@@ -1,6 +1,5 @@
 mod classes;
 mod console_log;
-mod dataset;
 mod file_opener;
 mod types;
 
@@ -24,8 +23,6 @@ use std::{
 
 use classes::algorithms::ALGORITHMS;
 use classes::run_algo::run_algo;
-
-use dataset::DatasetRow;
 
 use console_log::Logger;
 use file_opener::FileManager;
@@ -57,12 +54,7 @@ fn process_matrix(logger: Arc<Logger>, path: &Path, csv_sender: Sender<SenderInf
     for params in ALGORITHMS {
         logger.log_calculation(path, &params, "START");
 
-        let solutions = run_algo(params.clone(), matrix_vec.clone());
-        let solutions_unwrapped = match solutions {
-            Ok(s) if s.len() < 1 => {
-                logger.log_calculation(path, &params, "ERROR");
-                continue;
-            }
+        let dataset_row = match run_algo(params.clone(), matrix_vec.clone()) {
             Ok(s) => s,
             Err(_) => {
                 logger.log_calculation(path, &params, "ERROR");
@@ -72,13 +64,7 @@ fn process_matrix(logger: Arc<Logger>, path: &Path, csv_sender: Sender<SenderInf
 
         logger.log_calculation(path, &params, "END");
 
-        let row = DatasetRow::new(
-            file_name.clone(),
-            params,
-            matrix_vec.clone(),
-            solutions_unwrapped[0].fitness,
-        );
-        let _ = csv_sender.send(SenderInfo::DatasetRow(row));
+        let _ = csv_sender.send(SenderInfo::DatasetRow(dataset_row));
     }
 
     logger.log_file(path, "END");
@@ -94,7 +80,6 @@ fn writer_handle(receiver: Receiver<SenderInfo>, file_manager: FileManager) {
     } = file_manager;
     let mut writer = Writer::from_writer(dataset_file);
 
-    // Получаем результаты и записываем их
     for result in receiver {
         match result {
             SenderInfo::FileRow(FileRow(file_path)) => {

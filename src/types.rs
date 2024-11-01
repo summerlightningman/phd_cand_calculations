@@ -1,27 +1,9 @@
-use super::DatasetRow;
 use phd_cand::problems::travelling_salesman::algorithms::{
     ant_colony::algorithm::TSAntColonyAlgorithm, bee_colony::algorithm::TSBeeColonyAlgorithm,
     genetic::algorithm::TSGeneticAlgorithm,
 };
 use phd_cand::problems::travelling_salesman::solution::Solution;
-use serde_json::{json, Value};
-
-fn serialize_solution(solution: Solution) -> Value{
-    if let Some(time) = solution.time {
-        json!({
-            "path": solution.path,
-            "distance": solution.distance,
-            "fitness": solution.fitness,
-            "time": time
-        })
-    } else {
-        json!({
-            "path": solution.path,
-            "distance": solution.distance,
-            "fitness": solution.fitness
-        })
-    }
-}
+use super::classes::run_algo::RunAlgoResult;
 
 pub enum OptimizationAlgorithmEnum {
     BC(TSBeeColonyAlgorithm),
@@ -44,6 +26,6 @@ impl OptimizationAlgorithmEnum {
 pub struct FileRow(pub String);
 
 pub enum SenderInfo {
-    DatasetRow(DatasetRow),
+    DatasetRow(RunAlgoResult),
     FileRow(FileRow),
 }

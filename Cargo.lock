@@ -534,7 +534,7 @@ dependencies = [
 [[package]]
 name = "phd_cand"
 version = "0.1.0"
-source = "git+https://github.com/summerlightningman/phd_cand_algorithms.git#33d548ed0ad827e3857c04684bde39c9c97bc6fb"
+source = "git+https://github.com/summerlightningman/phd_cand_algorithms.git#a7767c8b8baa2d2002f7284f6133674f499962d2"
 dependencies = [
  "eval",
  "lru",
