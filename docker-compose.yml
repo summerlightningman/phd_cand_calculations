@@ -7,7 +7,7 @@ services:
     working_dir: /usr/src/app
     environment:
       - TZ=Europe/Moscow
-      - MATRICES_COUNT=10000
+      - MATRICES_COUNT=100000
     command: cargo run
     restart: unless-stopped
     ports:
@@ -15,4 +15,4 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '7'
+          cpus: "7"

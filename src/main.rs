@@ -26,7 +26,6 @@ use classes::run_algo::run_algo;
 
 use console_log::Logger;
 use file_opener::FileManager;
-
 use std::io::prelude::*;
 
 const MATRICES_DIR: &'static str = "matrices";
@@ -88,6 +87,9 @@ fn writer_handle(receiver: Receiver<SenderInfo>, file_manager: FileManager) {
                     .expect(format!("Unable to write {}", file_path).as_str());
             }
             SenderInfo::DatasetRow(row) => {
+                if row.iterations.is_empty() {
+                    continue
+                }
                 writer
                     .serialize(row)
                     .expect("Не удалось записать результат");

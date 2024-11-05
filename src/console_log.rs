@@ -51,6 +51,12 @@ impl Logger {
 
         let current_progress = self.calculate_progress();
 
-        println!("{} {}% {:>30} {:>101}", self.now(), current_progress, file_name, status)
+        println!(
+            "{} {}% {:>30} {:>101}",
+            self.now(),
+            current_progress,
+            file_name,
+            status
+        )
     }
 }
