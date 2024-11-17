@@ -1,127 +1,192 @@
 use super::algorithm_params::AlgorithmParams;
 
-pub const ALGORITHMS: [AlgorithmParams; 24] = [
-    // AC variants
+pub const ALGORITHMS: [AlgorithmParams; 30] = [
     AlgorithmParams::AC {
-        alpha: 1.25,
-        beta: 0.5,
-        q: 0.75,
-        p: 1.0,
-    }, //
+        alpha: 1.0,
+        beta: 2.0,
+        q: 100.0,
+        p: 0.5,
+        actors_count: 50,
+    },
     AlgorithmParams::AC {
-        alpha: 0.75,
+        alpha: 2.0,
         beta: 1.0,
-        q: 1.25,
+        q: 100.0,
         p: 0.5,
-    }, //
-    AlgorithmParams::AC {
-        alpha: 1.5,
-        beta: 0.5,
-        q: 0.75,
-        p: 0.5,
-    }, //
-    AlgorithmParams::AC {
-        alpha: 1.25,
-        beta: 0.5,
-        q: 1.0,
-        p: 0.75,
-    }, //
-    AlgorithmParams::AC {
-        alpha: 1.5,
-        beta: 0.5,
-        q: 1.0,
-        p: 0.75,
-    }, //
-    AlgorithmParams::AC {
-        alpha: 1.5,
-        beta: 0.75,
-        q: 1.25,
-        p: 0.75,
+        actors_count: 50,
     },
     AlgorithmParams::AC {
-        alpha: 1.5,
-        beta: 1.5,
-        q: 1.25,
-        p: 1.25,
-    }, //
+        alpha: 1.0,
+        beta: 5.0,
+        q: 100.0,
+        p: 0.5,
+        actors_count: 50,
+    },
     AlgorithmParams::AC {
-        alpha: 1.5,
-        beta: 1.25,
-        q: 1.0,
-        p: 0.75,
-    }, //
-    // BC variants
+        alpha: 1.0,
+        beta: 2.0,
+        q: 100.0,
+        p: 0.1,
+        actors_count: 50,
+    },
+    AlgorithmParams::AC {
+        alpha: 1.0,
+        beta: 2.0,
+        q: 100.0,
+        p: 0.01,
+        actors_count: 50,
+    },
+    AlgorithmParams::AC {
+        alpha: 1.0,
+        beta: 2.0,
+        q: 100.0,
+        p: 0.5,
+        actors_count: 20,
+    },
+    AlgorithmParams::AC {
+        alpha: 1.0,
+        beta: 2.0,
+        q: 100.0,
+        p: 0.5,
+        actors_count: 100,
+    },
+    AlgorithmParams::AC {
+        alpha: 1.0,
+        beta: 2.0,
+        q: 10.0,
+        p: 0.5,
+        actors_count: 50,
+    },
+    AlgorithmParams::AC {
+        alpha: 1.0,
+        beta: 2.0,
+        q: 1000.0,
+        p: 0.5,
+        actors_count: 50,
+    },
+    AlgorithmParams::AC {
+        alpha: 0.5,
+        beta: 0.5,
+        q: 100.0,
+        p: 0.5,
+        actors_count: 50,
+    },
+    // Параметры для Bee Colony Algorithm (BC)
     AlgorithmParams::BC {
-        workers_part: 0.15,
-        regenerate_func: "reverse_elements",
+        workers_part: 0.5,
+        research_func: "swap_indexes",
+        actors_count: 50,
     },
     AlgorithmParams::BC {
-        workers_part: 0.25,
-        regenerate_func: "reverse_elements",
+        workers_part: 0.7,
+        research_func: "swap_indexes",
+        actors_count: 50,
+    },
+    AlgorithmParams::BC {
+        workers_part: 0.3,
+        research_func: "swap_indexes",
+        actors_count: 50,
     },
     AlgorithmParams::BC {
         workers_part: 0.5,
-        regenerate_func: "swap_indexes",
+        research_func: "reverse_elements",
+        actors_count: 50,
     },
     AlgorithmParams::BC {
-        workers_part: 0.6,
-        regenerate_func: "reverse_elements",
+        workers_part: 0.5,
+        research_func: "swap_indexes",
+        actors_count: 20,
     },
     AlgorithmParams::BC {
-        workers_part: 0.65,
-        regenerate_func: "reverse_elements",
+        workers_part: 0.5,
+        research_func: "swap_indexes",
+        actors_count: 100,
     },
-    AlgorithmParams::BC {
-        workers_part: 0.75,
-        regenerate_func: "swap_indexes",
-    },
-    AlgorithmParams::BC {
-        workers_part: 0.75,
-        regenerate_func: "reverse_elements",
-    },
-    AlgorithmParams::BC {
-        workers_part: 0.9,
-        regenerate_func: "reverse_elements",
-    },
-    // GA variants
+    // Параметры для Genetic Algorithm (GA)
     AlgorithmParams::GA {
-        p_mutation: 0.2,
+        p_mutation: 0.05,
+        mutate_func: "swap_indexes",
+        select_func: "tournament(3)",
+        actors_count: 100,
+    },
+    AlgorithmParams::GA {
+        p_mutation: 0.05,
+        mutate_func: "reverse_elements",
+        select_func: "tournament(3)",
+        actors_count: 100,
+    },
+    AlgorithmParams::GA {
+        p_mutation: 0.05,
+        mutate_func: "swap_indexes",
         select_func: "roulette",
-        mutate_func: "reverse_elements",
-    }, //
-    AlgorithmParams::GA {
-        p_mutation: 0.2,
-        select_func: "stochastic",
-        mutate_func: "reverse_elements",
+        actors_count: 100,
     },
     AlgorithmParams::GA {
-        p_mutation: 0.2,
-        select_func: "stochastic",
+        p_mutation: 0.05,
         mutate_func: "swap_indexes",
+        select_func: "best_n",
+        actors_count: 100,
     },
     AlgorithmParams::GA {
-        p_mutation: 0.2,
-        select_func: "tournament",
-        mutate_func: "reverse_elements",
+        p_mutation: 0.01,
+        mutate_func: "swap_indexes",
+        select_func: "tournament(3)",
+        actors_count: 100,
     },
     AlgorithmParams::GA {
-        p_mutation: 0.4,
-        select_func: "tournament",
+        p_mutation: 0.1,
         mutate_func: "swap_indexes",
-    }, //
+        select_func: "tournament(3)",
+        actors_count: 100,
+    },
     AlgorithmParams::GA {
-        p_mutation: 0.4,
-        select_func: "tournament",
-        mutate_func: "reverse_elements",
-    }, //
-    AlgorithmParams::GA {
-        p_mutation: 0.6,
-        select_func: "tournament",
+        p_mutation: 0.05,
         mutate_func: "swap_indexes",
-    }, //
+        select_func: "tournament(3)",
+        actors_count: 50,
+    },
     AlgorithmParams::GA {
-        p_mutation: 0.6,
-        select_func: "tournament",
+        p_mutation: 0.05,
+        mutate_func: "swap_indexes",
+        select_func: "tournament(3)",
+        actors_count: 200,
+    },
+    // Параметры для Simulated Annealing Algorithm (SA)
+    AlgorithmParams::SA {
+        initial_temperature: 1000,
+        final_temperature: 1,
+        cooling_rate: 0.95,
+        mutate_func: "swap_indexes",
+    },
+    AlgorithmParams::SA {
+        initial_temperature: 1000,
+        final_temperature: 1,
+        cooling_rate: 0.8,
+        mutate_func: "swap_indexes",
+    },
+    AlgorithmParams::SA {
+        initial_temperature: 500,
+        final_temperature: 1,
+        cooling_rate: 0.95,
+        mutate_func: "swap_indexes",
+    },
+    AlgorithmParams::SA {
+        initial_temperature: 500,
+        final_temperature: 1,
+        cooling_rate: 0.8,
+        mutate_func: "swap_indexes",
+    },
+    AlgorithmParams::SA {
+        initial_temperature: 1000,
+        final_temperature: 1,
+        cooling_rate: 0.95,
         mutate_func: "reverse_elements",
-    }, //
+    },
+    AlgorithmParams::SA {
+        initial_temperature: 1000,
+        final_temperature: 1,
+        cooling_rate: 0.99,
+        mutate_func: "swap_indexes",
+    },
 ];
+
