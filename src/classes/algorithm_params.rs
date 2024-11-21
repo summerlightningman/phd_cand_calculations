@@ -21,9 +21,9 @@ pub enum AlgorithmParams {
         actors_count: usize,
     },
     SA {
-        initial_temperature: usize,
-        final_temperature: usize,
-        cooling_rate: f32,
+        initial_temperature: f64,
+        final_temperature: f64,
+        cooling_rate: f64,
         mutate_func: &'static str
     }
 }

@@ -1,13 +1,13 @@
-use crate::types::OptimizationAlgorithmEnum;
-use phd_cand::algorithms::bee_colony::research_methods::{reverse_elements, swap_indexes};
-use phd_cand::algorithms::genetic::methods::{Mutate, Select};
-use phd_cand::problems::travelling_salesman::algorithms::{
-    ant_colony::builder::TSAntColonyAlgorithmBuilder,
-    bee_colony::builder::TSBeeColonyAlgorithmBuilder, genetic::builder::TSGeneticAlgorithmBuilder,
+use phd_cand_algorithms::types::{Individual, Matrix, Rule, Task};
+use phd_cand_algorithms::builders::{
+    BeeColonyAlgorithmBuilder,
+    SimulatedAnnealingBuilder,
+    AntColonyAlgorithmBuilder,
+    GeneticAlgorithmBuilder
 };
-use phd_cand::problems::travelling_salesman::solution::Solution;
-use phd_cand::problems::travelling_salesman::types::Matrix;
+
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::time::Instant;
 use super::algorithm_params::AlgorithmParams;
 
@@ -29,92 +29,49 @@ where
 pub struct RunAlgoResultIteration {
     iter_num: usize,
     calc_time: u128,
-    distance: f64,
-    time: usize,
-    fitness: f32,
+    results: HashMap<String, f64>,
+    path: Vec<usize>,
+    weight: f32,
 }
 
 #[derive(Clone, Serialize)]
 pub struct RunAlgoResult {
     #[serde(serialize_with = "as_json")]
-    pub matrix: Matrix,
+    pub tasks: Vec<Task>,
     #[serde(serialize_with = "as_json")]
     pub algo: AlgorithmParams,
     #[serde(serialize_with = "as_json")]
     pub iterations: Vec<RunAlgoResultIteration>,
 }
 
-pub fn run_algo(params: AlgorithmParams, matrix: Matrix) -> Result<RunAlgoResult, String> {
-    let algo = match params {
-        AlgorithmParams::AC { alpha, beta, q, p } => {
-            let algo = TSAntColonyAlgorithmBuilder::new(matrix.clone())
-                .alpha(alpha)
-                .beta(beta)
-                .q(q)
-                .p(p)
-                .solutions_count(1)
-                .build();
-            OptimizationAlgorithmEnum::AC(algo)
-        }
-        AlgorithmParams::BC {
-            workers_part,
-            regenerate_func,
-        } => {
-            let func = if regenerate_func.eq("swap_indexes") {
-                swap_indexes(None)
-            } else {
-                reverse_elements(None)
-            };
-
-            let algo = TSBeeColonyAlgorithmBuilder::new(matrix.clone(), func)
-                .workers_part(workers_part)
-                .solutions_count(1)
-                .build();
-            OptimizationAlgorithmEnum::BC(algo)
-        }
-        AlgorithmParams::GA {
-            p_mutation,
-            select_func,
-            mutate_func,
-        } => {
-            let mutate = match mutate_func {
-                "reverse" => Mutate::reverse_elements(None),
-                _ => Mutate::swap_indexes(None),
-            };
-            let select = match select_func {
-                "tournament" => Select::tournament(3, None),
-                "roulette" => Select::roulette(None),
-                _ => Select::stochastic(None),
-            };
-            let algo = TSGeneticAlgorithmBuilder::new(matrix.clone(), mutate, select)
-                .p_mutation(p_mutation)
-                .solutions_count(1)
-                .build();
-            OptimizationAlgorithmEnum::GA(algo)
-        }
-    };
-
+pub fn run_algo(params: AlgorithmParams, tasks: Vec<Task>, rules: Vec<Rule>) -> Option<RunAlgoResult> {
     const MAX_ATTEMPTS: usize = 5;
     let iterations: RefCell<Vec<RunAlgoResultIteration>> = RefCell::new(Vec::with_capacity(60));
-
     let calculation_start = RefCell::new(Instant::now());
-    let callback_fn = |solutions: Vec<Solution>| {
-        let best_solution = solutions.first().unwrap();
+    let callback_fn = |individuals: Vec<Individual>| {
+        let best_solution = individuals.first().unwrap();
         let mut iters = iterations.borrow_mut();
 
-        let result = RunAlgoResultIteration {
-            iter_num: iters.len() + 1,
-            calc_time: calculation_start.borrow().elapsed().as_millis(),
-            distance: best_solution.distance,
-            time: best_solution.time.unwrap_or(0usize),
-            fitness: best_solution.fitness,
-        };
-        iters.push(result);
+        match best_solution.weight {
+            Some(weight) => {
+                let result = RunAlgoResultIteration {
+                    iter_num: iters.len() + 1,
+                    calc_time: calculation_start.borrow().elapsed().as_millis(),
+                    path: best_solution.value.clone(),
+                    results: best_solution.results.clone(),
+                    weight
+                };
+                iters.push(result);
+            },
+            None => {
+                return false
+            }
+        }
 
         if iters.len() >= MAX_ATTEMPTS {
             let mut attempts: usize = 0;
             for i in 1..iters.len() {
-                if iters[i].fitness >= iters[i - 1].fitness {
+                if iters[i].weight >= iters[i - 1].weight {
                     attempts += 1;
                 } else {
                     attempts = 0;
@@ -131,15 +88,70 @@ pub fn run_algo(params: AlgorithmParams, matrix: Matrix) -> Result<RunAlgoResult
         return true;
     };
 
-    if let Err(_) = algo.calculate(callback_fn) {
-        return Err("Calculation Error".to_string());
-    }
-
-    let info_cell = RunAlgoResult {
-        matrix,
-        algo: params,
-        iterations: iterations.into_inner(),
+    let tasks_clone = tasks.clone();
+    let result = match params {
+        AlgorithmParams::AC { alpha, beta, q, p, actors_count } => {
+            let algo = AntColonyAlgorithmBuilder::new(tasks_clone)
+                .rules(rules)
+                .actors_count(actors_count)
+                .alpha(alpha)
+                .beta(beta)
+                .q(q)
+                .p(p)
+                .solutions_count(1)
+                .build();
+            algo.run(callback_fn)
+        },
+        AlgorithmParams::BC {
+            workers_part,
+            research_func,
+            actors_count,
+        } => {
+            let algo = BeeColonyAlgorithmBuilder::new(tasks_clone)
+                .workers_part(workers_part)
+                .solutions_count(1)
+                .research_func_str(research_func)
+                .actors_count(actors_count)
+                .build();
+            algo.run(callback_fn)
+        },
+        AlgorithmParams::GA {
+            p_mutation,
+            select_func,
+            mutate_func,
+            actors_count
+        } => {
+            let algo = GeneticAlgorithmBuilder::new(tasks_clone)
+                .p_mutation(p_mutation)
+                .select_func_str(select_func)
+                .mutate_func_str(mutate_func)
+                .actors_count(actors_count)
+                .build();
+            algo.run(callback_fn)
+        },
+        AlgorithmParams::SA {
+            initial_temperature,
+            final_temperature,
+            cooling_rate,
+            mutate_func
+        } => {
+            let algo = SimulatedAnnealingBuilder::new(tasks_clone)
+                .initial_temperature(initial_temperature)
+                .final_temperature(final_temperature)
+                .cooling_rate(cooling_rate)
+                .mutate_func_str(mutate_func)
+                .build();
+            algo.run(callback_fn)
+        }
     };
 
-    Ok(info_cell)
+    if let Ok(_) = result {
+        Some(RunAlgoResult {
+            tasks,
+            algo,
+            iterations: iterations.into(),
+        })
+    } else {
+        None
+    }
 }
