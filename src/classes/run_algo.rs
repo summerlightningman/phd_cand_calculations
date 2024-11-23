@@ -1,16 +1,14 @@
-use rustc_hash::FxHashMap;
-use phd_cand_algorithms::types::{Individual, Task};
 use phd_cand_algorithms::builders::{
-    BeeColonyAlgorithmBuilder,
+    AntColonyAlgorithmBuilder, BeeColonyAlgorithmBuilder, GeneticAlgorithmBuilder,
     SimulatedAnnealingBuilder,
-    AntColonyAlgorithmBuilder,
-    GeneticAlgorithmBuilder
 };
+use phd_cand_algorithms::types::{Individual, Task};
+use rustc_hash::FxHashMap;
 
+use super::algorithm_params::AlgorithmParams;
+use chrono::prelude::*;
 use std::cell::RefCell;
 use std::time::Instant;
-use chrono::prelude::*;
-use super::algorithm_params::AlgorithmParams;
 
 use serde_json;
 
@@ -24,7 +22,6 @@ where
     let json_string = serde_json::to_string(value).map_err(serde::ser::Error::custom)?;
     serializer.serialize_str(&json_string)
 }
-
 
 #[derive(Clone, Serialize)]
 pub struct RunAlgoResultIteration {
@@ -48,15 +45,13 @@ pub struct RunAlgoResult {
 }
 
 pub fn run_algo(params: AlgorithmParams, tasks: Vec<Task>) -> Option<RunAlgoResult> {
-    const MAX_ATTEMPTS: usize = 5;
+    const MAX_ATTEMPTS: usize = 10;
     let iterations: RefCell<Vec<RunAlgoResultIteration>> = RefCell::new(Vec::with_capacity(60));
     let calculation_start = RefCell::new(Instant::now());
     let callback_fn = |individuals: Vec<Individual>| {
         let best_solution = match individuals.first() {
             Some(s) => s,
-            None => {
-                return false
-            }
+            None => return false,
         };
 
         let mut iters = iterations.borrow_mut();
@@ -68,29 +63,20 @@ pub fn run_algo(params: AlgorithmParams, tasks: Vec<Task>) -> Option<RunAlgoResu
                     calc_time: calculation_start.borrow().elapsed().as_millis(),
                     path: best_solution.value.clone(),
                     results: best_solution.results.clone(),
-                    weight
+                    weight,
                 };
                 iters.push(result);
-            },
-            None => {
-                return false
             }
+            None => return false,
         }
 
-        if iters.len() >= MAX_ATTEMPTS {
-            let mut attempts: usize = 0;
-            for i in (iters.len() - MAX_ATTEMPTS + 1)..iters.len() {
-                if iters[i].weight >= iters[i - 1].weight {
-                    attempts += 1;
-                } else {
-                    attempts = 0;
-                }
-
-                if attempts >= MAX_ATTEMPTS {
-                    calculation_start.replace(Instant::now());
-                    return false;
-                }
-            }
+        let (max_el_idx, _) = iters
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.weight.partial_cmp(&b.weight).unwrap())
+            .unwrap();
+        if iters.len() - max_el_idx > MAX_ATTEMPTS {
+            return false;
         }
 
         calculation_start.replace(Instant::now());
@@ -100,7 +86,13 @@ pub fn run_algo(params: AlgorithmParams, tasks: Vec<Task>) -> Option<RunAlgoResu
     let tasks_clone = tasks.clone();
     let time_start = Local::now();
     let result = match params {
-        AlgorithmParams::AC { alpha, beta, q, p, actors_count } => {
+        AlgorithmParams::AC {
+            alpha,
+            beta,
+            q,
+            p,
+            actors_count,
+        } => {
             let algo = AntColonyAlgorithmBuilder::new(tasks_clone)
                 .actors_count(actors_count)
                 .alpha(alpha)
@@ -110,7 +102,7 @@ pub fn run_algo(params: AlgorithmParams, tasks: Vec<Task>) -> Option<RunAlgoResu
                 .solutions_count(1)
                 .build();
             algo.run(callback_fn)
-        },
+        }
         AlgorithmParams::BC {
             workers_part,
             research_func,
@@ -123,12 +115,12 @@ pub fn run_algo(params: AlgorithmParams, tasks: Vec<Task>) -> Option<RunAlgoResu
                 .actors_count(actors_count)
                 .build();
             algo.run(callback_fn)
-        },
+        }
         AlgorithmParams::GA {
             p_mutation,
             select_func,
             mutate_func,
-            actors_count
+            actors_count,
         } => {
             let algo = GeneticAlgorithmBuilder::new(tasks_clone)
                 .p_mutation(p_mutation)
@@ -137,12 +129,12 @@ pub fn run_algo(params: AlgorithmParams, tasks: Vec<Task>) -> Option<RunAlgoResu
                 .actors_count(actors_count)
                 .build();
             algo.run(callback_fn)
-        },
+        }
         AlgorithmParams::SA {
             initial_temperature,
             final_temperature,
             cooling_rate,
-            mutate_func
+            mutate_func,
         } => {
             let algo = SimulatedAnnealingBuilder::new(tasks_clone)
                 .initial_temperature(initial_temperature)
@@ -155,7 +147,9 @@ pub fn run_algo(params: AlgorithmParams, tasks: Vec<Task>) -> Option<RunAlgoResu
     };
 
     if let Ok(_) = result {
-        let calculation_time = Local::now().signed_duration_since(time_start).num_milliseconds();
+        let calculation_time = Local::now()
+            .signed_duration_since(time_start)
+            .num_milliseconds();
         Some(RunAlgoResult {
             tasks,
             calculation_time,

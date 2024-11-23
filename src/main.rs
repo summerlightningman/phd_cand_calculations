@@ -14,6 +14,7 @@ use types::{FileRow, SenderInfo};
 
 use std::cmp::Ordering;
 use std::env;
+use std::fs::DirEntry;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
 use std::{
@@ -86,7 +87,12 @@ fn process_matrix(
             }
         };
 
-        logger.log_calculation(&file_names, &params, "END", Some(dataset_row.calculation_time));
+        logger.log_calculation(
+            &file_names,
+            &params,
+            "END",
+            Some(dataset_row.calculation_time),
+        );
 
         let _ = csv_sender.send(SenderInfo::DatasetRow(dataset_row));
     }
@@ -123,6 +129,29 @@ fn writer_handle(receiver: Receiver<SenderInfo>, file_manager: FileManager) {
             }
         }
     }
+}
+
+fn are_sizes_equal(
+    pattern: &Regex,
+    distance_path: &DirEntry,
+    time_path: &DirEntry,
+    importance_path: &DirEntry,
+) -> bool {
+    let (dist_filename, time_filename, impo_filename) = (
+        distance_path.file_name(),
+        time_path.file_name(),
+        importance_path.file_name(),
+    );
+
+    let dist_caps = pattern.captures(dist_filename.to_str().unwrap()).unwrap();
+    let time_caps = pattern.captures(time_filename.to_str().unwrap()).unwrap();
+    let impo_caps = pattern.captures(impo_filename.to_str().unwrap()).unwrap();
+
+    let dist_size = dist_caps.name("size").unwrap().as_str().parse::<usize>();
+    let time_size = time_caps.name("size").unwrap().as_str().parse::<usize>();
+    let impo_size = impo_caps.name("size").unwrap().as_str().parse::<usize>();
+
+    return dist_size == time_size && time_size == impo_size;
 }
 
 fn main() {
@@ -184,13 +213,15 @@ fn main() {
 
     matrices_paths.par_iter().chunks(3).for_each(|chunk| {
         if let [Ok(distance), Ok(time), Ok(importance)] = chunk[..] {
-            process_matrix(
-                logger.clone(),
-                distance.path().as_path(),
-                time.path().as_path(),
-                importance.path().as_path(),
-                result_sender.clone(),
-            )
+            if are_sizes_equal(&pattern, distance, time, importance) {
+                process_matrix(
+                    logger.clone(),
+                    distance.path().as_path(),
+                    time.path().as_path(),
+                    importance.path().as_path(),
+                    result_sender.clone(),
+                )
+            }
         }
     });
 
