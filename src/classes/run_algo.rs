@@ -1,4 +1,5 @@
-use phd_cand_algorithms::types::{Individual, Matrix, Rule, Task};
+use rustc_hash::FxHashMap;
+use phd_cand_algorithms::types::{Individual, Task};
 use phd_cand_algorithms::builders::{
     BeeColonyAlgorithmBuilder,
     SimulatedAnnealingBuilder,
@@ -7,8 +8,8 @@ use phd_cand_algorithms::builders::{
 };
 
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::time::Instant;
+use chrono::prelude::*;
 use super::algorithm_params::AlgorithmParams;
 
 use serde_json;
@@ -29,7 +30,7 @@ where
 pub struct RunAlgoResultIteration {
     iter_num: usize,
     calc_time: u128,
-    results: HashMap<String, f64>,
+    results: FxHashMap<String, f64>,
     path: Vec<usize>,
     weight: f32,
 }
@@ -42,14 +43,22 @@ pub struct RunAlgoResult {
     pub algo: AlgorithmParams,
     #[serde(serialize_with = "as_json")]
     pub iterations: Vec<RunAlgoResultIteration>,
+    #[serde(serialize_with = "as_json")]
+    pub calculation_time: i64,
 }
 
-pub fn run_algo(params: AlgorithmParams, tasks: Vec<Task>, rules: Vec<Rule>) -> Option<RunAlgoResult> {
+pub fn run_algo(params: AlgorithmParams, tasks: Vec<Task>) -> Option<RunAlgoResult> {
     const MAX_ATTEMPTS: usize = 5;
     let iterations: RefCell<Vec<RunAlgoResultIteration>> = RefCell::new(Vec::with_capacity(60));
     let calculation_start = RefCell::new(Instant::now());
     let callback_fn = |individuals: Vec<Individual>| {
-        let best_solution = individuals.first().unwrap();
+        let best_solution = match individuals.first() {
+            Some(s) => s,
+            None => {
+                return false
+            }
+        };
+
         let mut iters = iterations.borrow_mut();
 
         match best_solution.weight {
@@ -70,7 +79,7 @@ pub fn run_algo(params: AlgorithmParams, tasks: Vec<Task>, rules: Vec<Rule>) -> 
 
         if iters.len() >= MAX_ATTEMPTS {
             let mut attempts: usize = 0;
-            for i in 1..iters.len() {
+            for i in (iters.len() - MAX_ATTEMPTS + 1)..iters.len() {
                 if iters[i].weight >= iters[i - 1].weight {
                     attempts += 1;
                 } else {
@@ -89,10 +98,10 @@ pub fn run_algo(params: AlgorithmParams, tasks: Vec<Task>, rules: Vec<Rule>) -> 
     };
 
     let tasks_clone = tasks.clone();
+    let time_start = Local::now();
     let result = match params {
         AlgorithmParams::AC { alpha, beta, q, p, actors_count } => {
             let algo = AntColonyAlgorithmBuilder::new(tasks_clone)
-                .rules(rules)
                 .actors_count(actors_count)
                 .alpha(alpha)
                 .beta(beta)
@@ -146,10 +155,12 @@ pub fn run_algo(params: AlgorithmParams, tasks: Vec<Task>, rules: Vec<Rule>) -> 
     };
 
     if let Ok(_) = result {
+        let calculation_time = Local::now().signed_duration_since(time_start).num_milliseconds();
         Some(RunAlgoResult {
             tasks,
-            algo,
-            iterations: iterations.into(),
+            calculation_time,
+            algo: params,
+            iterations: iterations.into_inner(),
         })
     } else {
         None

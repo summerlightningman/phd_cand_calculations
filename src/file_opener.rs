@@ -19,8 +19,7 @@ impl FileManager {
         let now = Self::now();
         let newest_log_file = Self::get_log_file_path();
 
-        // if log file exists
-        if let Some(log_path) = newest_log_file {
+                if let Some(log_path) = newest_log_file {
             let old_log_file = File::open(&log_path);
 
             if let Ok(old_log_file) = old_log_file {

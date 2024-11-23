@@ -5,12 +5,14 @@ mod types;
 
 use chrono::prelude::*;
 use rayon::prelude::*;
+use regex::Regex;
 
 use csv::Writer;
 use ndarray::Array2;
 use ndarray_npy::ReadNpyExt;
 use types::{FileRow, SenderInfo};
 
+use std::cmp::Ordering;
 use std::env;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
@@ -26,49 +28,74 @@ use classes::run_algo::run_algo;
 
 use console_log::Logger;
 use file_opener::FileManager;
+use phd_cand_algorithms::types::{Purpose, Task};
 use std::io::prelude::*;
 
 const MATRICES_DIR: &'static str = "matrices";
 const MATRICES_COUNT_TARGET_DEFAULT: usize = 100;
 
-fn process_matrix(logger: Arc<Logger>, path: &Path, csv_sender: Sender<SenderInfo>) {
-    let file = match File::open(path) {
-        Ok(f) => f,
-        Err(_) => {
-            println!("Не удалось открыть файл {:?}", path);
-            return;
-        }
-    };
+fn process_matrix(
+    logger: Arc<Logger>,
+    distance_path: &Path,
+    time_path: &Path,
+    importance_path: &Path,
+    csv_sender: Sender<SenderInfo>,
+) {
+    let mut tasks: Vec<Task> = vec![];
+    let mut file_names: Vec<&str> = vec![];
 
-    let matrix = match Array2::<f64>::read_npy(file) {
-        Ok(mt) => mt,
-        Err(_) => return,
-    };
-
-    logger.log_file(path, "START");
-
-    let matrix_vec: Vec<Vec<f64>> = matrix.outer_iter().map(|row| row.to_vec()).collect();
-
-    let file_name: String = path.file_name().unwrap().to_str().unwrap().to_string();
-    for params in ALGORITHMS {
-        logger.log_calculation(path, &params, "START");
-
-        let dataset_row = match run_algo(params.clone(), matrix_vec.clone()) {
-            Ok(s) => s,
+    for (name, path, purpose) in vec![
+        ("distance", distance_path, Purpose::Min),
+        ("time", time_path, Purpose::Min),
+        ("importance", importance_path, Purpose::Max),
+    ] {
+        let file = match File::open(path) {
+            Ok(f) => f,
             Err(_) => {
-                logger.log_calculation(path, &params, "ERROR");
+                println!("Не удалось открыть файл {:?}", path);
+                return;
+            }
+        };
+
+        let matrix = match Array2::<f64>::read_npy(file) {
+            Ok(mt) => mt,
+            Err(_) => return,
+        }
+        .round();
+
+        let matrix_vec: Vec<Vec<f64>> = matrix.outer_iter().map(|row| row.to_vec()).collect();
+
+        tasks.push(Task {
+            name: name.to_string(),
+            matrix: matrix_vec,
+            purpose,
+        });
+        file_names.push(path.file_name().unwrap().to_str().unwrap())
+    }
+
+    logger.log_file(&file_names, "START");
+
+    for params in ALGORITHMS {
+        logger.log_calculation(&file_names, &params, "START", None);
+
+        let dataset_row = match run_algo(params.clone(), tasks.clone()) {
+            Some(s) => s,
+            None => {
+                logger.log_calculation(&file_names, &params, "ERROR", None);
                 continue;
             }
         };
 
-        logger.log_calculation(path, &params, "END");
+        logger.log_calculation(&file_names, &params, "END", Some(dataset_row.calculation_time));
 
         let _ = csv_sender.send(SenderInfo::DatasetRow(dataset_row));
     }
 
-    logger.log_file(path, "END");
+    logger.log_file(&file_names, "END");
 
-    let _ = csv_sender.send(SenderInfo::FileRow(FileRow(file_name.clone())));
+    for file_name in file_names {
+        let _ = csv_sender.send(SenderInfo::FileRow(FileRow(file_name.to_string())));
+    }
 }
 
 fn writer_handle(receiver: Receiver<SenderInfo>, file_manager: FileManager) {
@@ -88,7 +115,7 @@ fn writer_handle(receiver: Receiver<SenderInfo>, file_manager: FileManager) {
             }
             SenderInfo::DatasetRow(row) => {
                 if row.iterations.is_empty() {
-                    continue
+                    continue;
                 }
                 writer
                     .serialize(row)
@@ -110,7 +137,7 @@ fn main() {
 
     let curr_dir = current_dir().unwrap();
     let matrices_path = curr_dir.join(MATRICES_DIR);
-    let matrices_paths: Vec<_> = fs::read_dir(matrices_path)
+    let mut matrices_paths: Vec<_> = fs::read_dir(matrices_path)
         .unwrap()
         .filter(|dir_entry| {
             if log_entries.is_empty() {
@@ -124,18 +151,47 @@ fn main() {
         .take(matrices_count - log_entries.len())
         .collect();
 
+    let pattern = Regex::new(r".+_(?<size>\d+)\.npy").unwrap();
+    matrices_paths.sort_by(|a, b| {
+        let (a_filename, b_filename) = match (a, b) {
+            (Ok(a_file), Ok(b_file)) => (a_file.file_name(), b_file.file_name()),
+            _ => return Ordering::Equal,
+        };
+
+        let a_caps = pattern.captures(a_filename.to_str().unwrap()).unwrap();
+        let b_caps = pattern.captures(b_filename.to_str().unwrap()).unwrap();
+
+        let a_size = a_caps
+            .name("size")
+            .unwrap()
+            .as_str()
+            .parse::<usize>()
+            .unwrap();
+        let b_size = b_caps
+            .name("size")
+            .unwrap()
+            .as_str()
+            .parse::<usize>()
+            .unwrap();
+
+        a_size.cmp(&b_size)
+    });
+
     let (result_sender, result_receiver) = mpsc::channel();
     let writer_thread = thread::spawn(move || writer_handle(result_receiver, file_manager));
 
     let calculation_dt_start = Local::now();
 
-    matrices_paths.par_iter().for_each(|matrix| {
-        let path = match matrix {
-            Ok(dir_entry) => dir_entry.path(),
-            Err(_) => return,
-        };
-
-        process_matrix(logger.clone(), path.as_path(), result_sender.clone());
+    matrices_paths.par_iter().chunks(3).for_each(|chunk| {
+        if let [Ok(distance), Ok(time), Ok(importance)] = chunk[..] {
+            process_matrix(
+                logger.clone(),
+                distance.path().as_path(),
+                time.path().as_path(),
+                importance.path().as_path(),
+                result_sender.clone(),
+            )
+        }
     });
 
     drop(result_sender);

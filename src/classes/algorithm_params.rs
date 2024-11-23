@@ -82,6 +82,7 @@ impl Serialize for AlgorithmParams {
                 s.serialize_field("cooling_rate", cooling_rate)?;
                 s.serialize_field("initial_temperature", initial_temperature)?;
                 s.serialize_field("final_temperature", final_temperature)?;
+                s.end()
             }
         }
     }
