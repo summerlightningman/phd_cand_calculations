@@ -46,6 +46,8 @@ pub struct RunAlgoResult {
 
 pub fn run_algo(params: AlgorithmParams, tasks: Vec<Task>) -> Option<RunAlgoResult> {
     const MAX_ATTEMPTS: usize = 10;
+    const INVALID_VALUE: f32 = -999.0;
+
     let iterations: RefCell<Vec<RunAlgoResultIteration>> = RefCell::new(Vec::with_capacity(60));
     let calculation_start = RefCell::new(Instant::now());
     let callback_fn = |individuals: Vec<Individual>| {
@@ -70,12 +72,19 @@ pub fn run_algo(params: AlgorithmParams, tasks: Vec<Task>) -> Option<RunAlgoResu
             None => return false,
         }
 
-        let (max_el_idx, _) = iters
+        let (max_el_idx, w) = iters
             .iter()
             .enumerate()
-            .max_by(|(_, a), (_, b)| a.weight.partial_cmp(&b.weight).unwrap())
-            .unwrap();
-        if iters.len() - max_el_idx > MAX_ATTEMPTS {
+            .fold(None, |acc, (idx, el)| match acc {
+                Some((_, weight_max)) if el.weight > weight_max => {
+                    Some((idx, el.weight))
+                },
+                None => Some((idx, el.weight)),
+                _ => acc
+            })
+            .unwrap_or((0, INVALID_VALUE));
+
+        if w == INVALID_VALUE || iters.len() - max_el_idx > MAX_ATTEMPTS {
             return false;
         }
 
